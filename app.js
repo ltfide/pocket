@@ -261,6 +261,20 @@ function setPh(id, ph) {
   if (el) el.placeholder = ph;
 }
 
+function setModalLock(locked) {
+  const area = document.getElementById("dyn-content-area");
+  if (locked) {
+    if (area) area.classList.add("modal-open");
+    document.body.classList.add("modal-open");
+  } else {
+    const anyOpen = document.querySelectorAll(".modal-overlay.open").length > 0;
+    if (!anyOpen) {
+      if (area) area.classList.remove("modal-open");
+      document.body.classList.remove("modal-open");
+    }
+  }
+}
+
 function switchTab(tabId) {
   activeTabCode = tabId;
   document.querySelectorAll(".nav-item").forEach(el => el.classList.remove("active"));
@@ -299,12 +313,11 @@ function _v0(sLabels) {
         <button class="pill-btn ${shopFilter === 'bought' ? 'active' : ''}" onclick="setShopFilter('bought')">${escapeHtml(sLabels.filter_bought || 'Completed')}</button>
       </div>
       <div class="header-action-btns">
-        <button class="btn-terminal-compact" onclick="openTerminalModal()">
-          &gt;_ ${escapeHtml(sLabels.btn_terminal || 'Terminal')}
+        <button class="btn-icon-action terminal" onclick="openTerminalModal()" title="Terminal" aria-label="Terminal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
         </button>
-        <button class="btn-add-compact" onclick="openAddShopModal()">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          ${escapeHtml(sLabels.btn_add || 'Add')}
+        <button class="btn-icon-action primary" onclick="openAddShopModal()" title="Add" aria-label="Add">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </button>
       </div>
     </div>
@@ -380,12 +393,14 @@ function openPriceModal(item) {
   input.value = rawAmt > 0 ? formatNumberToIdr(rawAmt) : "";
   
   modal.classList.add("open");
+  setModalLock(true);
   input.focus();
   input.select();
 }
 
 function closePriceModal() {
   document.getElementById("price-modal").classList.remove("open");
+  setModalLock(false);
   pendingShopItem = null;
 }
 
@@ -416,12 +431,14 @@ function openTerminalModal() {
   const textarea = document.getElementById("terminal-raw-input");
 
   modal.classList.add("open");
+  setModalLock(true);
   handleTerminalInputLive();
   textarea.focus();
 }
 
 function closeTerminalModal() {
   document.getElementById("terminal-modal").classList.remove("open");
+  setModalLock(false);
 }
 
 function parseTerminalCommandLines(rawText) {
@@ -592,9 +609,8 @@ function _v1(tLabels) {
       </div>
       <div class="header-action-btns">
         <span class="badge-count">${doneCount}/${items.length}</span>
-        <button class="btn-add-compact" onclick="openAddTaskModal()">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          ${escapeHtml(tLabels.btn_add || 'Add')}
+        <button class="btn-icon-action primary" onclick="openAddTaskModal()" title="Add" aria-label="Add">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </button>
       </div>
     </div>
@@ -691,38 +707,14 @@ function _v3(jLabels) {
   const notes = _arr(3);
 
   return `
-    <div class="entry-form-card">
-      <input
-        type="text"
-        id="entry-input-title"
-        class="entry-input-title"
-        placeholder="${escapeHtml(jLabels.placeholder_title || 'Topic / Title...')}"
-      />
-      <textarea
-        id="entry-input-content"
-        class="entry-textarea"
-        placeholder="${escapeHtml(jLabels.placeholder_content || 'Write your reflection, thoughts, or ideas...')}"
-      ></textarea>
-      
-      <div class="entry-action-row">
-        
-        <div class="mood-btn-group">
-          <button class="mood-pill-btn mood-5 ${selectedMoodCd === '5' ? 'active' : ''}" onclick="selectMoodCd('5', this)" title="Great">
-            ${MOOD_ICONS["5"]}
-          </button>
-          <button class="mood-pill-btn mood-4 ${selectedMoodCd === '4' ? 'active' : ''}" onclick="selectMoodCd('4', this)" title="Good">
-            ${MOOD_ICONS["4"]}
-          </button>
-          <button class="mood-pill-btn mood-3 ${selectedMoodCd === '3' ? 'active' : ''}" onclick="selectMoodCd('3', this)" title="Neutral">
-            ${MOOD_ICONS["3"]}
-          </button>
-          <button class="mood-pill-btn mood-2 ${selectedMoodCd === '2' ? 'active' : ''}" onclick="selectMoodCd('2', this)" title="Bad">
-            ${MOOD_ICONS["2"]}
-          </button>
-        </div>
-        <button class="btn-entry-save" onclick="saveFeedEntry()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-          ${escapeHtml(jLabels.btn_save || 'Save Entry')}
+    <div class="compact-top-bar">
+      <div class="filter-pills">
+        <span class="view-title-pill">${escapeHtml(jLabels.view_title || 'Feed')}</span>
+      </div>
+      <div class="header-action-btns">
+        <span class="badge-count">${notes.length}</span>
+        <button class="btn-icon-action primary" onclick="openAddEntryModal()" title="Add" aria-label="Add">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </button>
       </div>
     </div>
@@ -736,7 +728,6 @@ function _v3(jLabels) {
 
         return `
           <div class="entry-card">
-            
             <div class="entry-date-box">
               <span class="entry-date-day">${d.day}</span>
               <span class="entry-date-dayname">${d.dayName}</span>
@@ -774,9 +765,38 @@ function selectMoodCd(cd, btn) {
   if (btn) btn.classList.add("active");
 }
 
-function saveFeedEntry() {
-  const inputTitle = document.getElementById("entry-input-title");
-  const inputContent = document.getElementById("entry-input-content");
+function openAddEntryModal() {
+  selectedMoodCd = "5";
+  document.querySelectorAll(".mood-pill-btn").forEach(b => b.classList.remove("active"));
+  const defMood = document.getElementById("mood-btn-5");
+  if (defMood) defMood.classList.add("active");
+
+  const m = appData.ui_labels?.modals || {};
+  const j = _l(3);
+  setTxt("dyn-add-entry-title", m.add_entry_title || "New Entry");
+  setTxt("dyn-add-entry-title-label", m.add_entry_title_label || "Topic");
+  setPh("new-entry-title", j.placeholder_title || "Topic / Title...");
+  setTxt("dyn-add-entry-content-label", m.add_entry_content_label || "Reflection");
+  setPh("new-entry-content", j.placeholder_content || "Write your reflection, thoughts, or ideas...");
+
+  document.getElementById("add-entry-modal").classList.add("open");
+  setModalLock(true);
+  const titleInput = document.getElementById("new-entry-title");
+  if (titleInput) titleInput.focus();
+}
+
+function closeAddEntryModal() {
+  document.getElementById("add-entry-modal").classList.remove("open");
+  setModalLock(false);
+  const titleInput = document.getElementById("new-entry-title");
+  if (titleInput) titleInput.value = "";
+  const contentInput = document.getElementById("new-entry-content");
+  if (contentInput) contentInput.value = "";
+}
+
+function submitNewEntryItem() {
+  const inputTitle = document.getElementById("new-entry-title");
+  const inputContent = document.getElementById("new-entry-content");
 
   const title = inputTitle ? inputTitle.value.trim() : "";
   const content = inputContent ? inputContent.value.trim() : "";
@@ -795,9 +815,7 @@ function saveFeedEntry() {
     date: new Date().toISOString().split("T")[0]
   });
 
-  if (inputTitle) inputTitle.value = "";
-  if (inputContent) inputContent.value = "";
-
+  closeAddEntryModal();
   persistLocalData();
   renderContentArea();
   showToast("Saved");
@@ -837,11 +855,13 @@ function openAddShopModal() {
     `).join("");
   }
   document.getElementById("add-shop-modal").classList.add("open");
+  setModalLock(true);
   document.getElementById("new-shop-name").focus();
 }
 
 function closeAddShopModal() {
   document.getElementById("add-shop-modal").classList.remove("open");
+  setModalLock(false);
   document.getElementById("new-shop-name").value = "";
   const rmkInput = document.getElementById("new-shop-rmk");
   if (rmkInput) rmkInput.value = "";
@@ -897,11 +917,13 @@ function submitNewShopItem() {
 
 function openAddTaskModal() {
   document.getElementById("add-task-modal").classList.add("open");
+  setModalLock(true);
   document.getElementById("new-task-title").focus();
 }
 
 function closeAddTaskModal() {
   document.getElementById("add-task-modal").classList.remove("open");
+  setModalLock(false);
   document.getElementById("new-task-title").value = "";
   document.getElementById("new-task-date").value = "";
 }
@@ -936,10 +958,12 @@ function openSettingsModal() {
   if (gistInput) gistInput.value = localStorage.getItem("id") || "";
 
   document.getElementById("settings-modal").classList.add("open");
+  setModalLock(true);
 }
 
 function closeSettingsModal() {
   document.getElementById("settings-modal").classList.remove("open");
+  setModalLock(false);
 }
 
 async function saveSettings() {
@@ -1281,8 +1305,14 @@ document.addEventListener("DOMContentLoaded", () => {
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay) {
         overlay.classList.remove("open");
+        setModalLock(false);
       }
     });
+    overlay.addEventListener("touchmove", (e) => {
+      if (e.target === overlay) {
+        e.preventDefault();
+      }
+    }, { passive: false });
   });
 
   ["click", "touchstart", "keydown"].forEach(evt => {
