@@ -1383,6 +1383,52 @@ function handleHeaderSyncTap() {
   }, 380);
 }
 
+function markAllItemsSynced() {
+  if (Array.isArray(appData.shopping)) {
+    appData.shopping.forEach(item => { item._synced = true; });
+  }
+  if (Array.isArray(appData.journal)) {
+    appData.journal.forEach(item => { item._synced = true; });
+  }
+}
+
+function reconcileWithRemote(remoteContent) {
+  const remoteShopIds = new Set((remoteContent.shopping || []).map(x => x.id));
+  const remoteJnlIds = new Set((remoteContent.journal || []).map(x => x.id));
+  let modified = false;
+
+  if (Array.isArray(appData.shopping)) {
+    const beforeLen = appData.shopping.length;
+    appData.shopping = appData.shopping.filter(item => {
+      if (item.is_bought && item._synced && !remoteShopIds.has(item.id)) {
+        return false;
+      }
+      return true;
+    });
+    if (appData.shopping.length !== beforeLen) modified = true;
+  }
+
+  if (Array.isArray(appData.journal)) {
+    const beforeLen = appData.journal.length;
+    appData.journal = appData.journal.filter(item => {
+      if (item._synced && !remoteJnlIds.has(item.id)) {
+        return false;
+      }
+      return true;
+    });
+    if (appData.journal.length !== beforeLen) modified = true;
+  }
+
+  if (Array.isArray(remoteContent.cfl_categories) && remoteContent.cfl_categories.length > 0) {
+    appData.cfl_categories = remoteContent.cfl_categories;
+  }
+  if (Array.isArray(remoteContent.jnl_categories) && remoteContent.jnl_categories.length > 0) {
+    appData.jnl_categories = remoteContent.jnl_categories;
+  }
+
+  return modified;
+}
+
 async function syncWithGistNow(forcePull = false) {
   const key = localStorage.getItem("key");
   const pat = localStorage.getItem("pat");
@@ -1424,10 +1470,17 @@ async function syncWithGistNow(forcePull = false) {
       if (remoteContent) {
         if (forcePull || !appData.updated_at || remoteContent.updated_at >= appData.updated_at) {
           appData = remoteContent;
+          markAllItemsSynced();
           renderDynamicUI();
           if (dot) dot.className = "sync-dot";
           showToast("Synchronized");
           return;
+        }
+
+        // Reconcile: If backend processed items while client was idle or had new local additions
+        const modified = reconcileWithRemote(remoteContent);
+        if (modified) {
+          renderDynamicUI();
         }
       }
     }
@@ -1461,6 +1514,7 @@ async function syncWithGistNow(forcePull = false) {
     });
 
     if (patchRes.ok) {
+      markAllItemsSynced();
       if (dot) dot.className = "sync-dot";
     }
   } catch (err) {
@@ -1577,6 +1631,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
   ["click", "touchstart", "keydown"].forEach(evt => {
     document.addEventListener(evt, resetInactivityTimer);
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && isUnlocked) {
+      syncWithGistNow(true);
+    }
+  });
+
+  window.addEventListener("focus", () => {
+    if (isUnlocked) {
+      syncWithGistNow(true);
+    }
   });
 
   if ("serviceWorker" in navigator) {
