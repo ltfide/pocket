@@ -48,6 +48,16 @@
         </div>
       </header>
 
+      <div id="ptr-container" class="ptr-container">
+        <div class="ptr-pill" id="ptr-pill">
+          <svg class="ptr-icon" id="ptr-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/>
+            <polyline points="21 3 21 8 16 8"/>
+          </svg>
+          <span id="ptr-text">Pull to refresh</span>
+        </div>
+      </div>
+
       <main class="content-area" id="dyn-content-area"></main>
 
       <nav class="bottom-nav" id="dyn-bottom-nav"></nav>
@@ -56,7 +66,12 @@
     <div class="modal-overlay" id="price-modal">
       <div class="modal-sheet">
         <div class="sheet-handle"></div>
-        <div class="sheet-title" id="modal-item-name"></div>
+        <div class="sheet-header-row">
+          <div class="sheet-title" id="modal-item-name" style="margin-bottom: 0;"></div>
+          <button type="button" class="btn-icon-danger" onclick="deleteFromPriceModal()" title="Delete" aria-label="Delete">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </button>
+        </div>
 
         <div class="price-input-hero">
           <span class="currency-prefix">Rp</span>
@@ -184,21 +199,31 @@
           <textarea id="new-entry-content" class="form-input-compact modal-textarea"></textarea>
         </div>
 
-        <div class="form-group-compact">
-          <label class="form-label-compact">Mood</label>
-          <div class="mood-btn-group">
-            <button type="button" class="mood-pill-btn mood-5 active" id="mood-btn-5" onclick="selectMoodCd('5', this)">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
-            </button>
-            <button type="button" class="mood-pill-btn mood-4" id="mood-btn-4" onclick="selectMoodCd('4', this)">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
-            </button>
-            <button type="button" class="mood-pill-btn mood-3" id="mood-btn-3" onclick="selectMoodCd('3', this)">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="8" y1="15" x2="16" y2="15"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
-            </button>
-            <button type="button" class="mood-pill-btn mood-2" id="mood-btn-2" onclick="selectMoodCd('2', this)">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M16 16s-1.5-2-4-2-4 2-4 2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
-            </button>
+        <div class="form-row-compact" style="align-items: flex-end;">
+          <div class="form-group-compact" style="flex-shrink: 0;">
+            <label class="form-label-compact">Mood</label>
+            <div class="mood-btn-group">
+              <button type="button" class="mood-pill-btn mood-5 active" id="mood-btn-5" onclick="selectMoodCd('5', this)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+              </button>
+              <button type="button" class="mood-pill-btn mood-4" id="mood-btn-4" onclick="selectMoodCd('4', this)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+              </button>
+              <button type="button" class="mood-pill-btn mood-3" id="mood-btn-3" onclick="selectMoodCd('3', this)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="8" y1="15" x2="16" y2="15"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+              </button>
+              <button type="button" class="mood-pill-btn mood-2" id="mood-btn-2" onclick="selectMoodCd('2', this)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M16 16s-1.5-2-4-2-4 2-4 2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="form-group-compact flex-1">
+            <label class="form-label-compact" id="dyn-add-entry-ctgr-label">Category</label>
+            <div class="select-code-box">
+              <span id="new-entry-ctgr-display" class="select-code-val font-mono">01</span>
+              <svg class="select-code-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+              <select id="new-entry-ctgr" class="select-code-native" onchange="onEntryCtgrChange(this)"></select>
+            </div>
           </div>
         </div>
 
@@ -231,6 +256,19 @@
         <div class="modal-btn-row">
           <button class="btn-modal-cancel" onclick="closeSettingsModal()" id="btn-cancel-settings">Cancel</button>
           <button class="btn-modal-submit" onclick="saveSettings()" id="btn-submit-settings">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="card-action-modal">
+      <div class="modal-sheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title" id="action-modal-title"></div>
+        <div class="sheet-desc" id="action-modal-sub" style="margin-bottom: 10px;"></div>
+        <div id="action-modal-body" class="action-detail-box" style="display: none;"></div>
+        <div class="modal-btn-row">
+          <button class="btn-modal-cancel" onclick="closeCardActionModal()">Close</button>
+          <button class="btn-modal-danger" onclick="confirmDeleteCardItem()">Delete</button>
         </div>
       </div>
     </div>

@@ -1,14 +1,42 @@
 const GIST_FILENAME = "pkt.json";
 
+const DEFAULT_JNL_CATEGORIES = [
+  { cd: "01", nm: "Daily", ds: "Routine logs" },
+  { cd: "02", nm: "Credentials", ds: "Sensitive data" },
+  { cd: "03", nm: "Detox", ds: "Habit tracking" },
+  { cd: "04", nm: "Ideas", ds: "Brainstorming" }
+];
+
 let appData = {
   updated_at: 0,
   last_sync_display: "--:--",
   tab_order: [],
   cfl_categories: [],
+  jnl_categories: [],
   ui_labels: {
     tabs: {}
   }
 };
+
+function getCflCategories() {
+  return (appData.cfl_categories || []).filter(c => {
+    if (c.kind) return c.kind === "01" || c.kind === "02";
+    const codeStr = String(c.cd || "");
+    return codeStr.startsWith("01") || codeStr.startsWith("02");
+  });
+}
+
+function getJnlCategories() {
+  return (Array.isArray(appData.jnl_categories) && appData.jnl_categories.length > 0)
+    ? appData.jnl_categories
+    : DEFAULT_JNL_CATEGORIES;
+}
+
+function isExpenseCategory(ctgrCd) {
+  const found = (appData.cfl_categories || []).find(c => c.cd === ctgrCd);
+  if (found && found.kind) return found.kind === "01";
+  return !String(ctgrCd || "").startsWith("02");
+}
 
 function _k(i) {
   const t = (appData && Array.isArray(appData.tab_order) && appData.tab_order.length > 0)
@@ -34,6 +62,7 @@ let taskFilter = "all";
 let shopFilter = "all";
 let selectedMoodCd = "5";
 let pendingShopItem = null;
+let activeActionTarget = null;
 let saveTimeout = null;
 let isUnlocked = false;
 
@@ -102,6 +131,7 @@ function lockApp() {
     last_sync_display: "--:--",
     tab_order: [],
     cfl_categories: [],
+    jnl_categories: [],
     ui_labels: { tabs: {} }
   };
   const container = document.getElementById("dyn-content-area");
@@ -245,10 +275,27 @@ function injectModalLabels(labels) {
   setTxt("btn-submit-settings", "Save");
 
   const ctgrSelect = document.getElementById("new-shop-ctgr");
-  if (ctgrSelect && appData.cfl_categories) {
-    ctgrSelect.innerHTML = appData.cfl_categories.map(c => `
+  const cflCats = getCflCategories();
+  if (ctgrSelect && cflCats.length > 0) {
+    ctgrSelect.innerHTML = cflCats.map(c => `
       <option value="${c.cd}">${c.cd} - ${c.nm}</option>
     `).join("");
+  }
+
+  const entryCtgrSelect = document.getElementById("new-entry-ctgr");
+  const jnlCats = getJnlCategories();
+  if (entryCtgrSelect && jnlCats.length > 0) {
+    entryCtgrSelect.innerHTML = jnlCats.map(c => `
+      <option value="${c.cd}">${c.cd} - ${c.nm}</option>
+    `).join("");
+    onEntryCtgrChange(entryCtgrSelect);
+  }
+}
+
+function onEntryCtgrChange(selectEl) {
+  const disp = document.getElementById("new-entry-ctgr-display");
+  if (disp && selectEl) {
+    disp.textContent = selectEl.value || "01";
   }
 }
 
@@ -305,6 +352,10 @@ function _v0(sLabels) {
     return true;
   });
 
+  const totalExpenseAmt = items
+    .filter(it => it.is_bought && it.actual_amt > 0 && isExpenseCategory(it.ctgr_cd))
+    .reduce((sum, it) => sum + (Number(it.actual_amt) || 0), 0);
+
   return `
     <div class="compact-top-bar">
       <div class="filter-pills" id="shop-pills">
@@ -322,20 +373,27 @@ function _v0(sLabels) {
       </div>
     </div>
 
+    ${shopFilter === 'bought' ? `
+      <div class="cfl-total-bar">
+        <span class="cfl-total-label">Total</span>
+        <span class="cfl-total-val font-mono">${fmtRupiah(totalExpenseAmt)}</span>
+      </div>
+    ` : ''}
+
     <div class="compact-list">
       ${filtered.length === 0 ? `<div class="empty-state"><p>--</p></div>` : filtered.map(it => `
         <div class="compact-card ${it.is_bought ? 'completed' : ''}">
           <button class="custom-check-btn ${it.is_bought ? 'checked' : ''}" onclick="onShopCheckClicked('${it.id}')">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
           </button>
-          <div class="card-main-info" onclick="onShopCheckClicked('${it.id}')">
+          <div class="card-main-info" onclick="openCardActionModal(0, '${it.id}')">
             <div class="card-title-row">
               <span class="card-title">${escapeHtml(it.item_nm)}</span>
               ${it.rmk ? `<span class="meta-chip">${escapeHtml(it.rmk)}</span>` : ''}
             </div>
           </div>
           ${it.is_bought && it.actual_amt > 0 ? `
-            <div class="card-price-badge">
+            <div class="card-price-badge" onclick="openCardActionModal(0, '${it.id}')">
               <div class="actual-price">${fmtRupiah(it.actual_amt)}</div>
             </div>
           ` : ''}
@@ -404,6 +462,19 @@ function closePriceModal() {
   pendingShopItem = null;
 }
 
+function deleteFromPriceModal() {
+  if (!pendingShopItem) return;
+  const list = _arr(0);
+  const idx = list.findIndex(x => x.id === pendingShopItem.id);
+  if (idx !== -1) {
+    list.splice(idx, 1);
+    persistLocalData();
+    renderContentArea();
+    showToast("Deleted");
+  }
+  closePriceModal();
+}
+
 function submitPriceModal() {
   if (!pendingShopItem) return;
   const input = document.getElementById("modal-price-input");
@@ -445,6 +516,7 @@ function parseTerminalCommandLines(rawText) {
   if (!rawText) return [];
   const lines = rawText.split("\n");
   const parsed = [];
+  const validCategories = getCflCategories();
 
   const todayDate = new Date().toISOString().split("T")[0];
   const yest = new Date();
@@ -475,6 +547,7 @@ function parseTerminalCommandLines(rawText) {
         id: "err-" + idx,
         item_nm: trimmed,
         isValid: false,
+        errMsg: `Invalid format: "${trimmed}"`,
         raw: trimmed
       });
       return;
@@ -482,6 +555,18 @@ function parseTerminalCommandLines(rawText) {
 
     const ctgrCd = trimmed.slice(0, firstColonIdx).trim();
     const itemsRaw = trimmed.slice(firstColonIdx + 1).trim();
+
+    const isCatValid = validCategories.some(c => c.cd === ctgrCd);
+    if (!isCatValid) {
+      parsed.push({
+        id: "err-cat-" + idx,
+        item_nm: trimmed,
+        isValid: false,
+        errMsg: `Category code not found: #${ctgrCd}`,
+        raw: trimmed
+      });
+      return;
+    }
 
     const items = itemsRaw.split(",");
     items.forEach((itemStr, subIdx) => {
@@ -510,7 +595,8 @@ function parseTerminalCommandLines(rawText) {
         parsed.push({
           id: "err-" + idx + "-" + subIdx,
           item_nm: trimmed,
-          isValid: false
+          isValid: false,
+          errMsg: `Invalid format: "${trimmed}"`
         });
       }
     });
@@ -533,9 +619,10 @@ function handleTerminalInputLive() {
 
   previewBox.innerHTML = parsed.map(item => {
     if (!item.isValid) {
+      const msg = item.errMsg || `Invalid format: "${item.item_nm}"`;
       return `
         <div class="terminal-preview-item invalid">
-          <span style="color: #ef4444;">Invalid format: "${escapeHtml(item.item_nm)}"</span>
+          <span style="color: #ef4444; font-weight: 600;">${escapeHtml(msg)}</span>
         </div>
       `;
     }
@@ -557,8 +644,14 @@ function handleTerminalInputLive() {
 
 function submitTerminalBulk() {
   const textarea = document.getElementById("terminal-raw-input");
-  const parsed = parseTerminalCommandLines(textarea.value).filter(x => x.isValid);
+  const allParsed = parseTerminalCommandLines(textarea.value);
+  const invalidItem = allParsed.find(x => !x.isValid);
+  if (invalidItem) {
+    showToast(invalidItem.errMsg || "Invalid format");
+    return;
+  }
 
+  const parsed = allParsed.filter(x => x.isValid);
   if (parsed.length === 0) {
     showToast("Invalid format");
     return;
@@ -621,7 +714,7 @@ function _v1(tLabels) {
           <button class="custom-check-btn ${t.is_done ? 'checked' : ''}" onclick="toggleTask('${t.id}')">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
           </button>
-          <div class="card-main-info" onclick="toggleTask('${t.id}')">
+          <div class="card-main-info" onclick="openCardActionModal(1, '${t.id}')">
             <div class="card-title-row">
               <span class="card-title">${escapeHtml(t.title)}</span>
               <span class="meta-chip ${t.type === 'PCT' ? 'pct' : 'adhoc'}">${t.type === 'PCT' ? 'PCT' : 'Ad-Hoc'}</span>
@@ -660,7 +753,7 @@ function _v2(cLabels) {
           : "-";
 
         return `
-          <div class="feed-card">
+          <div class="feed-card" onclick="openCardActionModal(2, '${c.id}')">
             <div class="feed-head">
               <span class="ticker-badge">${escapeHtml(c.ticker)}</span>
               <span class="countdown-badge">${diffBadge}</span>
@@ -725,9 +818,10 @@ function _v3(jLabels) {
         const mCd = n.moodCd || "3";
         const mColor = MOOD_COLORS[mCd] || "#6b7280";
         const mIcon = MOOD_ICONS[mCd] || MOOD_ICONS["3"];
+        const jnlCd = n.jnl_cd || "01";
 
         return `
-          <div class="entry-card">
+          <div class="entry-card" onclick="openCardActionModal(3, '${n.id}')">
             <div class="entry-date-box">
               <span class="entry-date-day">${d.day}</span>
               <span class="entry-date-dayname">${d.dayName}</span>
@@ -736,9 +830,12 @@ function _v3(jLabels) {
             <div class="entry-content-box">
               <div class="entry-header-row">
                 <span class="entry-title">${escapeHtml(n.title || 'Reflection')}</span>
-                <span class="mood-icon-badge" style="color: ${mColor};">
-                  ${mIcon}
-                </span>
+                <div style="display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                  <span class="meta-chip font-mono">${escapeHtml(jnlCd)}</span>
+                  <span class="mood-icon-badge" style="color: ${mColor};">
+                    ${mIcon}
+                  </span>
+                </div>
               </div>
               <div class="entry-body-text">${escapeHtml(n.content || '')}</div>
             </div>
@@ -771,6 +868,18 @@ function openAddEntryModal() {
   const defMood = document.getElementById("mood-btn-5");
   if (defMood) defMood.classList.add("active");
 
+  const entryCtgrSelect = document.getElementById("new-entry-ctgr");
+  const jnlCats = getJnlCategories();
+  if (entryCtgrSelect) {
+    if (entryCtgrSelect.options.length === 0) {
+      entryCtgrSelect.innerHTML = jnlCats.map(c => `
+        <option value="${c.cd}">${c.cd} - ${c.nm}</option>
+      `).join("");
+    }
+    entryCtgrSelect.value = jnlCats[0]?.cd || "01";
+    onEntryCtgrChange(entryCtgrSelect);
+  }
+
   const m = appData.ui_labels?.modals || {};
   const j = _l(3);
   setTxt("dyn-add-entry-title", m.add_entry_title || "New Entry");
@@ -797,9 +906,11 @@ function closeAddEntryModal() {
 function submitNewEntryItem() {
   const inputTitle = document.getElementById("new-entry-title");
   const inputContent = document.getElementById("new-entry-content");
+  const inputCtgr = document.getElementById("new-entry-ctgr");
 
   const title = inputTitle ? inputTitle.value.trim() : "";
   const content = inputContent ? inputContent.value.trim() : "";
+  const jnlCd = inputCtgr && inputCtgr.value ? inputCtgr.value : "01";
 
   if (!content) {
     showToast("Content cannot be empty");
@@ -811,6 +922,7 @@ function submitNewEntryItem() {
     id: "jnl-" + Date.now(),
     title: title || "-",
     content: content,
+    jnl_cd: jnlCd,
     moodCd: selectedMoodCd,
     date: new Date().toISOString().split("T")[0]
   });
@@ -819,6 +931,71 @@ function submitNewEntryItem() {
   persistLocalData();
   renderContentArea();
   showToast("Saved");
+}
+
+function openCardActionModal(tabIdx, itemId) {
+  const list = _arr(tabIdx);
+  const item = list.find(x => x.id === itemId);
+  if (!item) return;
+
+  activeActionTarget = { tabIdx, itemId };
+
+  const titleEl = document.getElementById("action-modal-title");
+  const subEl = document.getElementById("action-modal-sub");
+  const bodyEl = document.getElementById("action-modal-body");
+
+  bodyEl.style.display = "none";
+  bodyEl.textContent = "";
+
+  if (tabIdx === 0) {
+    const cat = getCflCategories().find(c => c.cd === item.ctgr_cd);
+    titleEl.textContent = item.item_nm || "-";
+    subEl.textContent = `${item.ctgr_cd || ""}${cat ? " - " + cat.nm : ""}${item.is_bought ? " · " + fmtRupiah(item.actual_amt) : " · Pending"}`;
+    if (item.rmk) {
+      bodyEl.textContent = item.rmk;
+      bodyEl.style.display = "block";
+    }
+  } else if (tabIdx === 1) {
+    titleEl.textContent = item.title || "-";
+    subEl.textContent = `${item.type || "ADHOC"}${item.due_dt ? " · Due " + item.due_dt : ""}`;
+  } else if (tabIdx === 2) {
+    titleEl.textContent = `${item.ticker || ""} — ${item.event || ""}`;
+    subEl.textContent = item.date || "";
+    if (item.note) {
+      bodyEl.textContent = item.note;
+      bodyEl.style.display = "block";
+    }
+  } else if (tabIdx === 3) {
+    titleEl.textContent = item.title || "Reflection";
+    subEl.textContent = `${item.date || ""} · #${item.jnl_cd || "01"}`;
+    if (item.content) {
+      bodyEl.textContent = item.content;
+      bodyEl.style.display = "block";
+    }
+  }
+
+  document.getElementById("card-action-modal").classList.add("open");
+  setModalLock(true);
+}
+
+function closeCardActionModal() {
+  document.getElementById("card-action-modal").classList.remove("open");
+  setModalLock(false);
+  activeActionTarget = null;
+}
+
+function confirmDeleteCardItem() {
+  if (!activeActionTarget) return;
+  const { tabIdx, itemId } = activeActionTarget;
+  const list = _arr(tabIdx);
+  const idx = list.findIndex(x => x.id === itemId);
+  if (idx !== -1) {
+    list.splice(idx, 1);
+    persistLocalData();
+    renderContentArea();
+    showToast("Deleted");
+  }
+  closeCardActionModal();
 }
 
 let addShopMode = "plan";
@@ -849,8 +1026,9 @@ function setAddShopMode(mode) {
 function openAddShopModal() {
   setAddShopMode("plan");
   const ctgrSelect = document.getElementById("new-shop-ctgr");
-  if (ctgrSelect && appData.cfl_categories && ctgrSelect.options.length === 0) {
-    ctgrSelect.innerHTML = appData.cfl_categories.map(c => `
+  const cflCats = getCflCategories();
+  if (ctgrSelect && cflCats.length > 0 && ctgrSelect.options.length === 0) {
+    ctgrSelect.innerHTML = cflCats.map(c => `
       <option value="${c.cd}">${c.cd} - ${c.nm}</option>
     `).join("");
   }
@@ -1197,13 +1375,13 @@ function handleHeaderSyncTap() {
     if (headerSyncTapCount >= 3) {
       openSettingsModal();
     } else {
-      syncWithGistNow();
+      syncWithGistNow(true);
     }
     headerSyncTapCount = 0;
   }, 380);
 }
 
-async function syncWithGistNow() {
+async function syncWithGistNow(forcePull = false) {
   const key = localStorage.getItem("key");
   const pat = localStorage.getItem("pat");
   const gistId = localStorage.getItem("id");
@@ -1218,6 +1396,7 @@ async function syncWithGistNow() {
 
   try {
     const response = await fetch(`https://api.github.com/gists/${gistId}`, {
+      cache: "no-store",
       headers: {
         "Authorization": `Bearer ${pat}`,
         "Accept": "application/vnd.github+json"
@@ -1241,7 +1420,7 @@ async function syncWithGistNow() {
       }
 
       if (remoteContent) {
-        if (!appData.updated_at || remoteContent.updated_at >= appData.updated_at) {
+        if (forcePull || !appData.updated_at || remoteContent.updated_at >= appData.updated_at) {
           appData = remoteContent;
           renderDynamicUI();
           if (dot) dot.className = "sync-dot";
@@ -1287,6 +1466,84 @@ async function syncWithGistNow() {
   }
 }
 
+function initPullToRefresh() {
+  const contentArea = document.getElementById("dyn-content-area");
+  const ptrContainer = document.getElementById("ptr-container");
+  const ptrIcon = document.getElementById("ptr-icon");
+  const ptrText = document.getElementById("ptr-text");
+  if (!contentArea || !ptrContainer) return;
+
+  let startY = 0;
+  let currentPull = 0;
+  let isPulling = false;
+  let isRefreshing = false;
+  const THRESHOLD = 54;
+
+  contentArea.addEventListener("touchstart", (e) => {
+    if (isRefreshing || document.body.classList.contains("modal-open")) return;
+    if (contentArea.scrollTop <= 0 && e.touches.length === 1) {
+      startY = e.touches[0].clientY;
+      currentPull = 0;
+      isPulling = true;
+      ptrContainer.style.transition = "none";
+    }
+  }, { passive: true });
+
+  contentArea.addEventListener("touchmove", (e) => {
+    if (!isPulling || isRefreshing) return;
+    if (contentArea.scrollTop > 0) {
+      isPulling = false;
+      ptrContainer.style.height = "0px";
+      return;
+    }
+
+    const deltaY = e.touches[0].clientY - startY;
+    if (deltaY > 0) {
+      if (e.cancelable) e.preventDefault();
+      currentPull = Math.min(88, deltaY * 0.45);
+      ptrContainer.style.height = `${currentPull}px`;
+      ptrContainer.style.opacity = String(Math.min(1, currentPull / THRESHOLD));
+
+      if (ptrIcon) {
+        ptrIcon.style.transform = `rotate(${Math.min(180, (currentPull / THRESHOLD) * 180)}deg)`;
+      }
+      if (ptrText) {
+        ptrText.textContent = currentPull >= THRESHOLD ? "Release to refresh" : "Pull to refresh";
+      }
+    } else {
+      currentPull = 0;
+      ptrContainer.style.height = "0px";
+    }
+  }, { passive: false });
+
+  contentArea.addEventListener("touchend", async () => {
+    if (!isPulling || isRefreshing) return;
+    isPulling = false;
+    ptrContainer.style.transition = "height 0.22s ease, opacity 0.22s ease";
+
+    if (currentPull >= THRESHOLD) {
+      isRefreshing = true;
+      ptrContainer.classList.add("refreshing");
+      ptrContainer.style.height = "44px";
+      ptrContainer.style.opacity = "1";
+      if (ptrText) ptrText.textContent = "Refreshing...";
+
+      await syncWithGistNow(true);
+
+      ptrContainer.classList.remove("refreshing");
+      ptrContainer.style.height = "0px";
+      ptrContainer.style.opacity = "0";
+      if (ptrIcon) ptrIcon.style.transform = "rotate(0deg)";
+      isRefreshing = false;
+    } else {
+      ptrContainer.style.height = "0px";
+      ptrContainer.style.opacity = "0";
+      if (ptrIcon) ptrIcon.style.transform = "rotate(0deg)";
+    }
+    currentPull = 0;
+  });
+}
+
 function showToast(msg) {
   const toast = document.getElementById("app-toast");
   if (!toast) return;
@@ -1300,6 +1557,7 @@ function showToast(msg) {
 document.addEventListener("DOMContentLoaded", () => {
   updateClock();
   setInterval(updateClock, 1000);
+  initPullToRefresh();
 
   document.querySelectorAll(".modal-overlay").forEach(overlay => {
     overlay.addEventListener("click", (e) => {
