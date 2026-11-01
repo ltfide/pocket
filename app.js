@@ -917,14 +917,15 @@ function submitNewEntryItem() {
     return;
   }
 
+  const now = new Date();
   const list = _arr(3);
   list.unshift({
-    id: "jnl-" + Date.now(),
+    id: "jnl-" + now.getTime(),
     title: title || "-",
     content: content,
     jnl_cd: jnlCd,
     moodCd: selectedMoodCd,
-    date: new Date().toISOString().split("T")[0]
+    date: now.toISOString()
   });
 
   closeAddEntryModal();
@@ -967,7 +968,8 @@ function openCardActionModal(tabIdx, itemId) {
     }
   } else if (tabIdx === 3) {
     titleEl.textContent = item.title || "Reflection";
-    subEl.textContent = `${item.date || ""} · #${item.jnl_cd || "01"}`;
+    const dateFormatted = item.date ? item.date.split("T")[0] : "";
+    subEl.textContent = `${dateFormatted} · #${item.jnl_cd || "01"}`;
     if (item.content) {
       bodyEl.textContent = item.content;
       bodyEl.style.display = "block";
